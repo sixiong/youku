@@ -5,8 +5,8 @@
 # by malone
 
 # 其他项目中使用直接按 class HomePage()中的方法即可，删除class Youku()不需解析部分，自定义方法解析json
-
-import requests, time, json, re, urllib.parse
+# from __future__ import print
+import requests, time, json, re, urllib
 from fake_useragent import UserAgent
 
 
@@ -19,7 +19,9 @@ class Youku():
                         "user-agent": UserAgent().random,
                         }
         # cookies中的cna，优酷请求不能禁用cookies，这是我的本地浏览器浏览优酷的cookies，直接复制过来用，默认对其url编码
-        self.utid = urllib.parse.quote('onBdERfZriwCAW+uM3cVByOa')
+        # self.utid = urllib.parse.quote('onBdERfZriwCAW+uM3cVByOa')
+        self.utid = urllib.pathname2url('onBdERfZriwCAW+uM3cVByOa')
+
         # self.utid = 'onBdERfZriwCAW+uM3cVByOa'
 
 
@@ -27,7 +29,7 @@ class Youku():
         response = requests.get('http://log.mmstat.com/eg.js').text
         re_obj = re.search('Etag="(.*)"', response)
         cna = re_obj.group(1)
-        self.utid = urllib.parse.quote(cna)
+        self.utid = urllib.pathname2url(cna)
         '''默认对cna解码后传到全局变量中，替代原有的utid'''
 
 
@@ -38,7 +40,7 @@ class Youku():
             # 解析视频真实地址的最最最关键的请求！！！所有信息都在返回的json格式文件中。
             # 通过抓包过程中可以得到F12监控加载信息。Ctrl+F搜索json?vid=就可以看到返回的json信息，复制粘贴到json在线解析网站（www.json.cn）对照分析
             # 根据分析，包括四个参数，然后程序生成相应参数，构造URL并进行模拟请求，得到返回数据
-            print('正在使用的cookie：',self.utid)
+            print '正在使用的cookie：',self.utid
             url = 'https://ups.youku.com/ups/get.json?vid={}&ccode=0401&client_ip=192.168.1.1&utid={}&client_ts={}'.format(
                 video_id, self.utid, int(time.time()))
             # 在headers中增加反盗链
@@ -51,24 +53,25 @@ class Youku():
                 if str(error['code']) == '-6004':
                     '''之前有过这个url编码的错误，再次测试遇不到了。先放着，试了几次没遇到，等遇到再解决'''
                     if retry==0:
-                        print('cookie出错，对URL编码的cookie进行解码')
+                        print 'cookie出错，对URL编码的cookie进行解码'
                         self.utid = urllib.parse.unquote(self.utid)
                         return self.get_video_info(video_url, retry=1)
                     elif retry==1:
-                        print('解码后的cookie仍然不能使用，可能cookie被禁，现重新获取cookie')
+                        print '解码后的cookie仍然不能使用，可能cookie被禁，现重新获取cookie'
                         self.get_cna()
                         return self.get_video_info(video_url)
                 elif str(error['code']) == '-3307':
                     # 黄金会员才可观看
-                    print('黄金会员视频无法获得视频源',error['note'])
+                    print '黄金会员视频无法获得视频源',error['note']
                     pass
                 elif str(error['code']) == '-2004':
                     # 登录账号订阅up主才可观看
-                    print('订阅视频无法获得视频源',error['note'])
+                    print '订阅视频无法获得视频源',error['note']
             else:
-                self.parse_res(res_json)
-        except:
-            print('cookie被禁，现重新获取cookie')
+                # self.parse_res(res_json)
+                return self.get_flv_url(res_json)
+        except Exception,e:
+            print 'cookie被禁，现重新获取cookie'
             self.get_cna()
             return self.get_video_info(video_url)
 
@@ -82,8 +85,8 @@ class Youku():
             video_id = result.group(1)
             return video_id
         else:
-            print('请检查url格式是否有误（url中是否包含了视频id）','\n',
-                  '格式应如：http://v.youku.com/v_show/id_XMTU2NTk5MDgxMg==.html')
+            print '请检查url格式是否有误（url中是否包含了视频id）'
+            print '格式应如：http://v.youku.com/v_show/id_XMTU2NTk5MDgxMg==.html'
             exit()
 
 
@@ -91,20 +94,63 @@ class Youku():
         '''
         这个只是尝试解析，应根据项目需要定制自己要的视频源
         '''
+        print
+        print
+        print res_json
+        print
+        print
         video = res_json.get('data').get('video')
-        print('\n''视频标题：', video.get('title'))
+        print video
+        # print 'video title:' 
+        # print unicode(video['title'])
         if video.get('stream_types').get('default') != None:
             # 随便找了几个视频链接试了下，大部分视频格式是在json文件的'default'标签中
-            print('\n', '该视频有以下几种格式：', video.get('stream_types').get('default'), '\n')
+            print '\n', '该视频有以下几种格式：', video.get('stream_types').get('default'), '\n'
         else:
             # 试了优酷首页的人民的名义，视频格式在'guoyu'标签中，这里直接连父标签打出来
-            print('\n', '该视频有以下几种格式：', video.get('stream_types'), '\n')
+            print '\n', '该视频有以下几种格式：', video.get('stream_types'), '\n'
         for stream in res_json.get('data').get('stream'):
-            print('*' * 100)
-            print('视频类型：', stream.get('stream_type'))
-            print("视频总时长：", self.milliseconds_to_time(stream.get('milliseconds_video')))
-            print('视频总大小:', '%.2f MB' % (float(stream.get('size') / (1024 ** 2))))
+            print '*' * 100
+            print '视频类型：', stream.get('stream_type')
+            print "视频总时长：", self.milliseconds_to_time(stream.get('milliseconds_video'))
+            print '视频总大小:', '%.2f MB' % (float(stream.get('size') / (1024 ** 2)))
             self.get_seg(stream)
+
+
+    def get_video_all_formats(self,video):
+        result = None
+        if video.get('stream_types').get('default') != None:
+            result = video.get('stream_types').get('default')
+        else:
+            result = video.get('stream_types')
+        if not result:
+            result = result.get('en')
+        return result
+
+    def get_flv_url(self, res_json):
+        video = res_json.get('data').get('video')
+        all_video_formats = self.get_video_all_formats(video)
+
+        stream_list = filter(lambda stream:"flv" in stream.get('stream_type'),res_json.get('data').get('stream'))
+        urls = []
+        # has flv format video
+        if len(stream_list) > 0:
+            stream = stream_list[0]
+            print 'video type: ', stream.get('stream_type')
+            print "video total time: ", self.milliseconds_to_time(stream.get('milliseconds_video'))
+            print 'video total size in : ', '%d B' % (int(stream.get('size') ))
+            seg_num = len(stream.get('segs'))
+            print '+' * 20, 'has total %d segs' % seg_num, '+' * 20
+            for i in range(seg_num):
+                seg = stream.get('segs')[i]
+                print "第%d段时长：" % (i + 1), self.milliseconds_to_time(seg.get('total_milliseconds_video'))
+                print "第%d段大小：" % (i + 1), '%.2f MB' % (float(seg.get('size') / (1024 ** 2)))
+                print "第%d段视频地址：" % (i + 1), seg.get('cdn_url')
+                urls.append(seg.get('cdn_url'))
+            return urls
+        else:
+            return None
+        
 
     # 信息中的视频时长是ms，用此函数转成时分秒的格式
     def milliseconds_to_time(self, milliseconds):
@@ -116,12 +162,12 @@ class Youku():
     # 每个视频分成若干段，用此函数获得各段的信息
     def get_seg(self, stream):
         seg_num = len(stream.get('segs'))
-        print('+' * 20, '该视频共%d段' % seg_num, '+' * 20)
+        print '+' * 20, '该视频共%d段' % seg_num, '+' * 20
         for i in range(seg_num):
             seg = stream.get('segs')[i]
-            print("第%d段时长：" % (i + 1), self.milliseconds_to_time(seg.get('total_milliseconds_video')))
-            print("第%d段大小：" % (i + 1), '%.2f MB' % (float(seg.get('size') / (1024 ** 2))))
-            print("第%d段视频地址：" % (i + 1), seg.get('cdn_url'))
+            print "第%d段时长：" % (i + 1), self.milliseconds_to_time(seg.get('total_milliseconds_video'))
+            print "第%d段大小：" % (i + 1), '%.2f MB' % (float(seg.get('size') / (1024 ** 2)))
+            print "第%d段视频地址：" % (i + 1), seg.get('cdn_url')
 
     # 根据上面的到的链接下载视频
     def video_download(self):
@@ -146,12 +192,12 @@ class HomePage():
 
 
 if __name__ == '__main__':
-    url_input = input(
-            "粘贴你想解析的优酷视频链接粘贴到此处，"
-            "如:http://v.youku.com/v_show/id_XMTU2NTk5MDgxMg==.html,然后按回车键执行！" + '\n' + '>>>')
-    # url_input='http://v.youku.com/v_show/id_XMTU3NTkxNDIwMA==.html'
+    # url_input = input(
+    #         "粘贴你想解析的优酷视频链接粘贴到此处，"
+    #         "如:http://v.youku.com/v_show/id_XMTU2NTk5MDgxMg==.html,然后按回车键执行！" + '\n' + '>>>')
+    url_input='http://v.youku.com/v_show/id_XMTU3NTkxNDIwMA==.html'
     youku = Youku()
-    youku.get_video_info(url_input)
+    urls = youku.get_video_info(url_input)
 
 '''
 if __name__ == '__main__':
